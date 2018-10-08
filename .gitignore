@@ -1,0 +1,12 @@
+/.vs
+/Debug
+/Release
+*.user
+*.old
+*.suo
+*.ncb
+*.sdf
+*UpgradeLog*
+/_ReSharper.*
+/_UpgradeReport_Files*
+/ipch
