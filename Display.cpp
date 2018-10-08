@@ -7,6 +7,8 @@
 
 #include <assert.h>
 
+#define SQRT_2 1.414213562
+
 // powers of two only!
 const DWORD WIDTH = 512;
 const DWORD HEIGHT = 512;
@@ -59,6 +61,7 @@ void addFlowToCell(int x, int y, float fl)
     flow[iy][ix] += fl;
 }
 
+#define SOURCE_EMISSION 50
 VOID Render()
 {
     float entry = 0;
@@ -70,8 +73,8 @@ VOID Render()
     // Update the water source
     if (enableSource)
     {
-        water[sourceY][sourceX] += 50;
-        entry += 50;
+        water[sourceY][sourceX] += SOURCE_EMISSION;
+        entry += SOURCE_EMISSION;
     }
 
     // Cleanup the flow information
@@ -136,7 +139,7 @@ VOID Render()
                             if (dHeight > 0)
                             {
                                 if ((tx&ty & 1) > 0)
-                                    dHeight = dHeight / 1.414213562;
+                                    dHeight = dHeight / SQRT_2;
 
                                 cFall += sqrt(dHeight);
                                 tFall += 1;
@@ -175,7 +178,7 @@ VOID Render()
                             {
 
                                 if ((tx&ty & 1) > 0)
-                                    dHeight = dHeight / 1.414213562;
+                                    dHeight = dHeight / SQRT_2;
 
                                 //float fFall = dHeight;
 
