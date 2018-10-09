@@ -282,7 +282,7 @@ VOID Render()
                     fred = given[y][x] * 20; // / water[y][x];
 
                 if (terrain[y][x] > 0)
-                    fblue = water[y][x] * 20;
+                    fblue = water[y][x] * 5;
 
                 R = nshade * (fred * 5); //+ (log(1+abs(flow[y][x]/water[y][x]))*100));
                 G = nshade * (map[y * 512 + x] * 0.5);
@@ -412,8 +412,11 @@ LRESULT WINAPI MsgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     return DefWindowProc(hWnd, msg, wParam, lParam);
 }
 
-
-int main(int argc, char* argv[])
+int CALLBACK WinMain(
+    _In_ HINSTANCE hInstance,
+    _In_ HINSTANCE hPrevInstance,
+    _In_ LPSTR     lpCmdLine,
+    _In_ int       nCmdShow)
 {
     for (int y = 0; y < HEIGHT; y++)
     {
