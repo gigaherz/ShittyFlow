@@ -67,102 +67,83 @@ void addFlowToCell(int x, int y, float fl)
 
 void calculateFlowFor(int y, int x, float cWater)
 {
-    float cHeight = totalHeight(x, y);
-    float cFall = 0;
-    float tFall = 0;
+    // Calculate average of cell and neighbours
     float cAvg = 0;
     float tAvg = 0;
-
-    // For each neighbor of the cell
     for (int ty = -1; ty < 2; ty++)
     {
         for (int tx = -1; tx < 2; tx++)
         {
-            float nHeight = cHeight;
-
-            if (tx | ty)
-                nHeight = totalHeight(x + tx, y + ty);
-
+            float nHeight = totalHeight(x + tx, y + ty);
             cAvg += nHeight;
             tAvg += 1;
         }
     }
-
     cAvg /= tAvg;
 
-    float fGive = cHeight - cAvg;
+    const float cellHeight = totalHeight(x, y);
+    const float waterAboveAverage = cellHeight - cAvg;
 
-    if (fGive < 0)
+    if (waterAboveAverage <= 0)
         return;
 
-    //float maxGive = sqrt(fGive);
-    float maxGive = fGive;
+    const float availableToGive = min(waterAboveAverage, cWater);
+    if (availableToGive <= 0)
+        return;
 
-    if (maxGive > cWater)
-        maxGive = cWater;
-
+    float cFall = 0;
     for (int ty = -1; ty < 2; ty++)
     {
         for (int tx = -1; tx < 2; tx++)
         {
-            // if not 0,0
+            // if not self
             if (tx | ty)
             {
-                float nHeight = totalHeight(x + tx, y + ty);
-                float dHeight = (cHeight - nHeight);
+                const float otherHeight = totalHeight(x + tx, y + ty);
+                float deltaHeight = (cellHeight - otherHeight);
 
-                if (dHeight > 0)
+                if (deltaHeight > 0)
                 {
                     // if diagonal
                     if ((tx&ty&1) > 0)
-                        dHeight = dHeight / SQRT_2;
+                        deltaHeight = deltaHeight / SQRT_2;
 
-                    cFall += sqrt(dHeight);
-                    tFall += 1;
+                    cFall += sqrt(deltaHeight);
                 }
             }
         }
     }
 
-    //cFall /= tFall;
-
-    float cGive = cFall;
-
-    if (cGive > maxGive)
-        cGive = maxGive;
+    float cGive = min(cFall, availableToGive);
 
     if (cGive < 0.000001f)
-        cGive = 0;
+        return;
 
-    //float fAmount = (1- 1/(1+max(0,2*(cHeight - cAvg))));
-
-    //float cAmount = cWater * fAmount;
-
-    given[y][x] = cGive;
-
-    // For each neighbor of the cell
+    float tGiven = 0;
     for (int ty = -1; ty < 2; ty++)
     {
         for (int tx = -1; tx < 2; tx++)
         {
-            // if not 0,0
+            // if not self
             if (tx | ty)
             {
-                float nHeight = totalHeight(x + tx, y + ty);
-                float dHeight = (cHeight - nHeight);
+                const float otherHeight = totalHeight(x + tx, y + ty);
+                float deltaHeight = (cellHeight - otherHeight);
 
-                if (dHeight > 0)
+                if (deltaHeight > 0)
                 {
                     // if diagonal
                     if ((tx&ty & 1) > 0)
-                        dHeight = dHeight / SQRT_2;
+                        deltaHeight = deltaHeight / SQRT_2;
 
                     //float fFall = dHeight;
 
-                    float dWater = sqrt(dHeight) * cGive / cFall;
+                    float dWater = sqrt(deltaHeight) * cGive / cFall;
                     //float dWater = (sqrt(dHeight * 0.9999) * cGive) / cFall;
 
                     //float dWater = (cAmount * fFall / cFall);
+
+                    tGiven += dWater;
 
                     addFlowToCell(x + tx, y + ty, dWater);
                     addFlowToCell(x, y, -dWater);
@@ -170,6 +151,8 @@ void calculateFlowFor(int y, int x, float cWater)
             }
         }
     }
+
+    given[y][x] = tGiven;
 }
 
 void calculateFlow()
@@ -196,6 +179,7 @@ void calculateFlow()
         for (int x = 0; x < WIDTH; x++)
         {
             flow[y][x] = 0;
+            given[y][x] = 0;
         }
     }
 
@@ -295,10 +279,10 @@ VOID Render()
                 float fblue = 0;
 
                 if (water[y][x] > 0)
-                    fred = given[y][x]; // / water[y][x];
+                    fred = given[y][x] * 20; // / water[y][x];
 
                 if (terrain[y][x] > 0)
-                    fblue = water[y][x] * 200;
+                    fblue = water[y][x] * 20;
 
                 R = nshade * (fred * 5); //+ (log(1+abs(flow[y][x]/water[y][x]))*100));
                 G = nshade * (map[y * 512 + x] * 0.5);
@@ -375,19 +359,21 @@ VOID Render()
         if (pt.x >= 0 && pt.y >= 0 && pt.x < WIDTH && pt.y < HEIGHT)
         {
             UINT flagH = TA_LEFT;
-            UINT flagV = TA_TOP;
+            UINT flagV = TA_BOTTOM;
             if (pt.x >= WIDTH / 2)
             {
                 flagH = TA_RIGHT;
             }
             if (pt.y >= HEIGHT / 2)
             {
-                flagV = TA_BOTTOM;
+                flagV = TA_TOP;
             }
             SetTextAlign(winDC, flagH | flagV);
 
             char tmp[256];
-            int len = sprintf(tmp, "(%d, %d) = %f %f %f %f", pt.x, pt.y, terrain[pt.y][pt.x], water[pt.y][pt.x], flow[pt.y][pt.x], given[pt.y][pt.x]);
+            int len = sprintf(tmp, "(%d, %d) = %f (%f + %f)", pt.x, pt.y, 
+                terrain[pt.y][pt.x] + water[pt.y][pt.x], 
+                terrain[pt.y][pt.x], water[pt.y][pt.x]);
             TextOut(winDC, pt1.x, pt1.y, tmp, len);
         }
     }
