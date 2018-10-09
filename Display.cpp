@@ -9,10 +9,14 @@
 
 #define SQRT_2 1.414213562
 
+#define SOURCE_EMISSION 500
+
+#define SCALE 2
+
 // powers of two only!
 const DWORD WIDTH = 512;
 const DWORD HEIGHT = 512;
-DWORD buffer[HEIGHT * 2][WIDTH * 2];
+DWORD buffer[HEIGHT * SCALE][WIDTH * SCALE];
 
 HWND hWnd;
 BITMAPINFO bmi;
@@ -26,8 +30,8 @@ float water[HEIGHT][WIDTH]; // current water level
 float flow[HEIGHT][WIDTH]; // water level difference for the pass (temp)
 float given[HEIGHT][WIDTH]; // water given by each cell
 
-int sourceX = WIDTH / 2;
-int sourceY = HEIGHT / 2;
+int sourceX = WIDTH / SCALE;
+int sourceY = HEIGHT / SCALE;
 
 float totalSourced;
 float totalDrained;
@@ -61,8 +65,114 @@ void addFlowToCell(int x, int y, float fl)
     flow[iy][ix] += fl;
 }
 
-#define SOURCE_EMISSION 50
-VOID Render()
+void calculateFlowFor(int y, int x, float cWater)
+{
+    float cHeight = totalHeight(x, y);
+    float cFall = 0;
+    float tFall = 0;
+    float cAvg = 0;
+    float tAvg = 0;
+
+    // For each neighbor of the cell
+    for (int ty = -1; ty < 2; ty++)
+    {
+        for (int tx = -1; tx < 2; tx++)
+        {
+            float nHeight = cHeight;
+
+            if (tx | ty)
+                nHeight = totalHeight(x + tx, y + ty);
+
+            cAvg += nHeight;
+            tAvg += 1;
+        }
+    }
+
+    cAvg /= tAvg;
+
+    float fGive = cHeight - cAvg;
+
+    if (fGive < 0)
+        return;
+
+    //float maxGive = sqrt(fGive);
+    float maxGive = fGive;
+
+    if (maxGive > cWater)
+        maxGive = cWater;
+
+    for (int ty = -1; ty < 2; ty++)
+    {
+        for (int tx = -1; tx < 2; tx++)
+        {
+            // if not 0,0
+            if (tx | ty)
+            {
+                float nHeight = totalHeight(x + tx, y + ty);
+                float dHeight = (cHeight - nHeight);
+
+                if (dHeight > 0)
+                {
+                    // if diagonal
+                    if ((tx&ty&1) > 0)
+                        dHeight = dHeight / SQRT_2;
+
+                    cFall += sqrt(dHeight);
+                    tFall += 1;
+                }
+            }
+        }
+    }
+
+    //cFall /= tFall;
+
+    float cGive = cFall;
+
+    if (cGive > maxGive)
+        cGive = maxGive;
+
+    if (cGive < 0.000001f)
+        cGive = 0;
+
+    //float fAmount = (1- 1/(1+max(0,2*(cHeight - cAvg))));
+
+    //float cAmount = cWater * fAmount;
+
+    given[y][x] = cGive;
+
+    // For each neighbor of the cell
+    for (int ty = -1; ty < 2; ty++)
+    {
+        for (int tx = -1; tx < 2; tx++)
+        {
+            // if not 0,0
+            if (tx | ty)
+            {
+                float nHeight = totalHeight(x + tx, y + ty);
+                float dHeight = (cHeight - nHeight);
+
+                if (dHeight > 0)
+                {
+                    // if diagonal
+                    if ((tx&ty & 1) > 0)
+                        dHeight = dHeight / SQRT_2;
+
+                    //float fFall = dHeight;
+
+                    float dWater = sqrt(dHeight) * cGive / cFall;
+                    //float dWater = (sqrt(dHeight * 0.9999) * cGive) / cFall;
+
+                    //float dWater = (cAmount * fFall / cFall);
+
+                    addFlowToCell(x + tx, y + ty, dWater);
+                    addFlowToCell(x, y, -dWater);
+                }
+            }
+        }
+    }
+}
+
+void calculateFlow()
 {
     float entry = 0;
     float drain = 0;
@@ -73,8 +183,11 @@ VOID Render()
     // Update the water source
     if (enableSource)
     {
-        water[sourceY][sourceX] += SOURCE_EMISSION;
-        entry += SOURCE_EMISSION;
+        //if (water[sourceY][sourceX] < SOURCE_EMISSION)
+        {
+            water[sourceY][sourceX] += SOURCE_EMISSION;
+            entry += SOURCE_EMISSION;
+        }
     }
 
     // Cleanup the flow information
@@ -94,104 +207,7 @@ VOID Render()
 
             if (cWater > 0)
             {
-                float cHeight = totalHeight(x, y);
-                float cFall = 0;
-                float tFall = 0;
-                float cAvg = 0;
-                float tAvg = 0;
-
-                // For each neighbor of the cell
-                for (int ty = -1; ty < 2; ty++)
-                {
-                    for (int tx = -1; tx < 2; tx++)
-                    {
-                        float nHeight = cHeight;
-
-                        if (tx | ty)
-                            nHeight = totalHeight(x + tx, y + ty);
-
-                        cAvg += nHeight;
-                        tAvg += 1;
-                    }
-                }
-
-                cAvg /= tAvg;
-
-                float fGive = cHeight - cAvg;
-
-                if (fGive > cWater)
-                    fGive = cWater;
-
-                float maxGive = sqrt(fGive);
-
-                if (maxGive > cWater)
-                    maxGive = cWater;
-
-                for (int ty = -1; ty < 2; ty++)
-                {
-                    for (int tx = -1; tx < 2; tx++)
-                    {
-                        if (tx | ty)
-                        {
-                            float nHeight = totalHeight(x + tx, y + ty);
-                            float dHeight = (cHeight - nHeight);
-
-                            if (dHeight > 0)
-                            {
-                                if ((tx&ty & 1) > 0)
-                                    dHeight = dHeight / SQRT_2;
-
-                                cFall += sqrt(dHeight);
-                                tFall += 1;
-                            }
-                        }
-                    }
-                }
-
-                //cFall /= tFall;
-
-                float cGive = cFall;
-
-                if (cGive > maxGive)
-                    cGive = maxGive;
-
-                if (cGive < 0.000001f)
-                    cGive = 0;
-
-                //float fAmount = (1- 1/(1+max(0,2*(cHeight - cAvg))));
-
-                //float cAmount = cWater * fAmount;
-
-                given[y][x] = cGive;
-
-                // For each neighbor of the cell
-                for (int ty = -1; ty < 2; ty++)
-                {
-                    for (int tx = -1; tx < 2; tx++)
-                    {
-                        if (tx | ty)
-                        {
-                            float nHeight = totalHeight(x + tx, y + ty);
-                            float dHeight = (cHeight - nHeight);
-
-                            if (dHeight > 0)
-                            {
-
-                                if ((tx&ty & 1) > 0)
-                                    dHeight = dHeight / SQRT_2;
-
-                                //float fFall = dHeight;
-
-                                float dWater = sqrt(dHeight * 0.9999) * cGive / cFall;
-
-                                //float dWater = (cAmount * fFall / cFall);
-
-                                addFlowToCell(x + tx, y + ty, dWater);
-                                addFlowToCell(x, y, -dWater);
-                            }
-                        }
-                    }
-                }
+                calculateFlowFor(y, x, cWater);
             }
         }
     }
@@ -248,6 +264,11 @@ VOID Render()
     avgWater += fwater;
     avgFlow += fflow;
     nRenders += 1;
+}
+
+VOID Render()
+{
+    calculateFlow();
 
     for (int y = 0; y < HEIGHT; y++)
     {
@@ -255,25 +276,34 @@ VOID Render()
         {
             int R, G, B;
 
-            float shade = (terrain[y][x] - terrain[min(511, y + 1)][max(0, x - 1)]) / terrain[y][x];
+            if (terrain[y][x] <= 0)
+            {
+                R = 255;
+                G = 0;
+                B = 0;
+            }
+            else
+            {
+                float shade = (terrain[y][x] - terrain[min(511, y + 1)][max(0, x - 1)]) / terrain[y][x];
 
-            shade = shade + 0.1 * ((water[y][x] - water[min(511, y + 1)][max(0, x - 1)]) / terrain[y][x]);
+                shade = shade + 0.1 * ((water[y][x] - water[min(511, y + 1)][max(0, x - 1)]) / terrain[y][x]);
 
-            float pshade = min(4 * max(0, shade), 1);
-            float nshade = max(0, 1 + 2 * min(0, shade));
+                float pshade = min(4 * max(0, shade), 1);
+                float nshade = max(0, 1 + 2 * min(0, shade));
 
-            float fred = 0;
-            float fblue = 0;
+                float fred = 0;
+                float fblue = 0;
 
-            if (water[y][x]>0)
-                fred = given[y][x]; // / water[y][x];
+                if (water[y][x] > 0)
+                    fred = given[y][x]; // / water[y][x];
 
-            if (terrain[y][x]>0)
-                fblue = water[y][x] * 200;
+                if (terrain[y][x] > 0)
+                    fblue = water[y][x] * 200;
 
-            R = nshade * (fred * 5); //+ (log(1+abs(flow[y][x]/water[y][x]))*100));
-            G = nshade * (map[y * 512 + x] * 0.5);
-            B = nshade * (fblue);
+                R = nshade * (fred * 5); //+ (log(1+abs(flow[y][x]/water[y][x]))*100));
+                G = nshade * (map[y * 512 + x] * 0.5);
+                B = nshade * (fblue);
+            }
 
             R = max(0, min(255, R));
             G = max(0, min(255, G));
@@ -292,8 +322,8 @@ VOID Render()
 
     SetDIBitsToDevice(
         winDC,
-        0, 0, WIDTH * 2, HEIGHT * 2,
-        0, 0, 0, HEIGHT * 2,
+        0, 0, WIDTH * SCALE, HEIGHT * SCALE,
+        0, 0, 0, HEIGHT * SCALE,
         buffer,
         &bmi,
         DIB_RGB_COLORS
@@ -331,6 +361,37 @@ VOID Render()
         lastTickCount = GetTickCount();
     }
 
+    if (GetAsyncKeyState(VK_LSHIFT) & 0x80000000)
+    {
+        POINT pt1;
+        GetCursorPos(&pt1);
+        ScreenToClient(hWnd, &pt1);
+
+        POINT pt = pt1;
+        pt.x /= SCALE;
+        pt.y /= SCALE;
+        pt.y = HEIGHT - pt.y - 1;
+
+        if (pt.x >= 0 && pt.y >= 0 && pt.x < WIDTH && pt.y < HEIGHT)
+        {
+            UINT flagH = TA_LEFT;
+            UINT flagV = TA_TOP;
+            if (pt.x >= WIDTH / 2)
+            {
+                flagH = TA_RIGHT;
+            }
+            if (pt.y >= HEIGHT / 2)
+            {
+                flagV = TA_BOTTOM;
+            }
+            SetTextAlign(winDC, flagH | flagV);
+
+            char tmp[256];
+            int len = sprintf(tmp, "(%d, %d) = %f %f %f %f", pt.x, pt.y, terrain[pt.y][pt.x], water[pt.y][pt.x], flow[pt.y][pt.x], given[pt.y][pt.x]);
+            TextOut(winDC, pt1.x, pt1.y, tmp, len);
+        }
+    }
+
     ReleaseDC(hWnd, winDC);
 }
 
@@ -345,7 +406,8 @@ LRESULT WINAPI MsgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
     case WM_KEYDOWN:
         //Cleanup();
-        PostQuitMessage(0);
+        if (wParam == VK_ESCAPE)
+            PostQuitMessage(0);
         return 0;
 
     case WM_LBUTTONDOWN:
@@ -357,7 +419,7 @@ LRESULT WINAPI MsgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
         return 0;
     case WM_RBUTTONDOWN:
 
-        enableSource = !enableSource;
+        enableSource = false;
 
     }
 
